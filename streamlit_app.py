@@ -179,7 +179,7 @@ if "graph_app" not in st.session_state:
 
     # LLMs
     writer_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3.1-flash-lite",
         temperature=0.7
     )
     writer_llm_with_tools = writer_llm.bind_tools(tools)
