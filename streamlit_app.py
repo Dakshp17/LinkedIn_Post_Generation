@@ -179,7 +179,7 @@ if "graph_app" not in st.session_state:
 
     # LLMs
     writer_llm = ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite",
+        model="gemini-2.5-flash-lite",
         temperature=0.7
     )
     writer_llm_with_tools = writer_llm.bind_tools(tools)
@@ -258,10 +258,36 @@ if "graph_app" not in st.session_state:
 
     tool_node = ToolNode(tools)
 
+    def get_text_content(content) -> str:
+        """
+        Safely extracts plain text from an LLM message's .content field.
+        Gemini (and some other providers) can return content as a list of
+        content blocks (e.g. [{"type": "text", "text": "..."}]) instead of
+        a plain string, especially after a tool-calling turn. This flattens
+        either shape into a single string so downstream .replace()/.strip()/
+        .split() calls never crash.
+        """
+        if isinstance(content, str):
+            return content
+
+        if isinstance(content, list):
+            parts = []
+            for block in content:
+                if isinstance(block, str):
+                    parts.append(block)
+                elif isinstance(block, dict):
+                    # Common shapes: {"type": "text", "text": "..."} or {"text": "..."}
+                    if "text" in block:
+                        parts.append(block["text"])
+            return "".join(parts)
+
+        # Fallback for any other unexpected type
+        return str(content) if content is not None else ""
+
     def extract_draft_node(state: State) -> dict:
-        """Extracts the draft from the last message."""
+        """After the writer finishes tool calls, pulls the final text out as the draft."""
         last_message = state["messages"][-1]
-        draft = last_message.content
+        draft = get_text_content(last_message.content)
         return {"draft": draft}
 
     def reviewer_node(state: State) -> dict:
@@ -271,7 +297,7 @@ if "graph_app" not in st.session_state:
         response = reviewer_llm.invoke(
             [("system", REVIEWER_SYSTEM_PROMPT), ("human", prompt)]
         )
-        review_text = response.content.strip()
+        review_text = get_text_content(response.content).strip()
 
         is_approved = "APPROVED" in review_text.upper().split("FEEDBACK")[0]
 
@@ -385,6 +411,25 @@ if st.button("🚀 Generate Post", type="primary", use_container_width=True):
 
             try:
                 final_state = st.session_state.graph_app.invoke(initial_state)
+
+                # Safety net: some providers occasionally return content as a
+                # list of blocks instead of a plain string. Normalize here so
+                # every .replace()/.split() call below is guaranteed a string.
+                def _as_text(value) -> str:
+                    if isinstance(value, str):
+                        return value
+                    if isinstance(value, list):
+                        parts = []
+                        for block in value:
+                            if isinstance(block, str):
+                                parts.append(block)
+                            elif isinstance(block, dict) and "text" in block:
+                                parts.append(block["text"])
+                        return "".join(parts)
+                    return str(value) if value is not None else ""
+
+                final_state["draft"] = _as_text(final_state.get("draft", ""))
+                final_state["review_feedback"] = _as_text(final_state.get("review_feedback", ""))
 
                 # Display results
                 st.markdown("---")
