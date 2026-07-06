@@ -1,4 +1,5 @@
 # 📝 LinkedIn Post Generator - Streamlit GUI
+[Live Demo](https://linkedinpostgeneration-n6ipacix4ndc5bru2q4bxf.streamlit.app/)
 
 A web-based interface for the LinkedIn Post Generator app built with Streamlit. Write, review, and iterate on LinkedIn posts using AI.
 
